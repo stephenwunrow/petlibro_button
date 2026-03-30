@@ -2,6 +2,7 @@
 import paho.mqtt.client as mqtt
 import subprocess
 import json
+import paho.mqtt.publish as publish
 
 # --- CONFIGURATION ---
 MQTT_BROKER = "localhost"           # Replace if your MQTT broker is on another host
@@ -29,7 +30,8 @@ def on_message(client, userdata, msg):
     action = data.get("action", "")
     if action in ["single", "double", "long"]:
         print(f"Button pressed ({action})! Running script...")
-        subprocess.run(["python3", SCRIPT_PATH, COMMAND_ARG])
+        publish.single("final_petlibro/command", COMMAND_ARG, hostname=MQTT_BROKER)
+        print(f"Sent '{COMMAND_ARG}' command to final_petlibro.py")
     else:
         print(f"Ignored action: {action}")
 
