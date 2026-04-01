@@ -6,12 +6,15 @@ import uuid
 from dotenv import load_dotenv
 import os
 import paho.mqtt.client as mqtt
+from datetime import datetime
 
 BASE_URL = "https://api.us.petlibro.com"
 
 MQTT_BROKER = "localhost"
 MQTT_TOPIC = "final_petlibro/command"
 
+def log(msg):
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
 
 class PetlibroClient:
     def __init__(self, email, password, region="US", timezone="America/Chicago"):
@@ -49,7 +52,7 @@ class PetlibroClient:
         async with self.session.post(url, json=payload, headers=self.headers) as resp:
             data = await resp.json()
             self.token = data["data"]["token"]
-            print("✅ Logged in")
+            log("✅ Logged in")
 
     async def request(self, path, payload=None):
         url = f"{BASE_URL}{path}"
@@ -78,14 +81,14 @@ class PetlibroClient:
     async def rotation_loop(self, device_id):
         while True:
             await asyncio.sleep(60)
-            print("[AUTO] Rotating tray")
+            log("[AUTO] Rotating tray")
             try:
                 await self.set_rotate_food_bowl(device_id)
             except Exception as e:
-                print(f"[AUTO] Rotation failed: {e}")
+                log(f"[AUTO] Rotation failed: {e}")
 
     async def open_tray(self, device_id, tray):
-        print("🍽 Opening tray")
+        log("🍽 Opening tray")
         data = await self.request(
             "/device/wetFeedingPlan/manualFeedNow",
             {"deviceSn": device_id, "plate": tray}
@@ -99,11 +102,11 @@ class PetlibroClient:
 
         async with self.session.post(url, json={"deviceSn": device_sn, "plate": 1}, headers=headers) as resp:
             data = await resp.json()
-            print("Rotate result:", data)
+            log("Rotate result:", data)
             return data
 
     async def stop_feed_now(self, device_sn, feed_id):
-        print(f"⏹ Closing tray (feedId={feed_id})")
+        log(f"⏹ Closing tray (feedId={feed_id})")
         await self.request(
             "/device/wetFeedingPlan/stopFeedNow",
             {"deviceSn": device_sn, "feedId": feed_id}
@@ -123,12 +126,12 @@ class MQTTListener:
         self.client.on_message = self.on_message
 
     def on_connect(self, client, userdata, flags, rc):
-        print("📡 Connected to MQTT")
+        log("📡 Connected to MQTT")
         client.subscribe(MQTT_TOPIC)
 
     def on_message(self, client, userdata, msg):
         command = msg.payload.decode().strip()
-        print(f"📨 MQTT received: {command}")
+        log(f"📨 MQTT received: {command}")
         asyncio.run_coroutine_threadsafe(self.queue.put(command), self.loop)
 
     def start(self):
@@ -163,14 +166,14 @@ async def main():
             await asyncio.sleep(15)
             await client.stop_feed_now(DEVICE_ID, fid)
 
-        print("🚀 Ready for MQTT commands...")
+        log("🚀 Ready for MQTT commands...")
 
         while True:
             cmd = await mqtt_listener.queue.get()
 
             if cmd == "open":
                 if not await client.is_device_online(DEVICE_ID):
-                    print("⚠️ Device offline")
+                    log("⚠️ Device offline")
                     continue
 
                 if rotation_task:
