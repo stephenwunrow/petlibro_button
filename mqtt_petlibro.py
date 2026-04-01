@@ -77,7 +77,7 @@ class PetlibroClient:
 
     async def rotation_loop(self, device_id):
         while True:
-            await asyncio.sleep(30 * 60)
+            await asyncio.sleep(60)
             print("[AUTO] Rotating tray")
             try:
                 await self.set_rotate_food_bowl(device_id)
@@ -160,7 +160,7 @@ async def main():
         feed_id = None
 
         async def auto_close(fid):
-            await asyncio.sleep(15 * 60)
+            await asyncio.sleep(15)
             await client.stop_feed_now(DEVICE_ID, fid)
 
         print("🚀 Ready for MQTT commands...")
