@@ -61,6 +61,22 @@ class PetlibroClient:
 
     async def list_devices(self):
         return await self.request("/device/device/list")
+    
+    async def is_device_online(client, device_id):
+        devices = await client.list_devices()
+        for d in devices:
+            if d["deviceSn"] == device_id:
+                return d.get("online", False)
+        return False
+    
+    async def rotation_loop(client, device_id):
+        while True:
+            await asyncio.sleep(30 * 60)  # 30 minutes
+            print("[AUTO] Rotating tray (30 min interval)")
+            try:
+                await client.set_rotate_food_bowl(device_id)
+            except Exception as e:
+                print(f"[AUTO] Rotation failed: {e}")
 
     async def open_tray(self, device_id, tray):
         print("🍽 Opening tray")
@@ -141,13 +157,26 @@ async def main():
         for d in devices:
             print(d["name"], "online:", d["online"], "deviceSn:", d["deviceSn"])
 
+        rotation_task = asyncio.create_task(client.rotation_loop(DEVICE_ID))
+
         while True:
             cmd = await asyncio.to_thread(input, "Command: ")
             cmd = cmd.strip().lower()
 
             if cmd == "open":
-                print("[DEBUG] Rotating once")
+                if not await client.is_device_online(DEVICE_ID):
+                    print("⚠️ Device is offline. Try again later.")
+                    continue
+                
+                # Cancel existing rotation timer
+                if rotation_task:
+                    rotation_task.cancel()
+                    try:
+                        await rotation_task
+                    except asyncio.CancelledError:
+                        pass
 
+                print("[DEBUG] Rotating once")
                 # Rotate exactly once
                 await client.set_rotate_food_bowl(DEVICE_ID)
 
@@ -159,12 +188,16 @@ async def main():
 
                 asyncio.create_task(auto_close(feed_id))
 
+                rotation_task = asyncio.create_task(client.rotation_loop(DEVICE_ID))
+
             elif cmd == "exit":
                 # Optionally close the tray before exiting
                 try:
                     await client.stop_feed_now(DEVICE_ID, feed_id)
                 except Exception:
                     pass
+                if rotation_task:
+                    rotation_task.cancel()
                 break
 
             else:
