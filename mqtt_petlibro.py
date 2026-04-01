@@ -102,7 +102,7 @@ class PetlibroClient:
 
         async with self.session.post(url, json={"deviceSn": device_sn, "plate": 1}, headers=headers) as resp:
             data = await resp.json()
-            log("Rotate result:", data)
+            log(f"Rotate result: {data}")
             return data
 
     async def stop_feed_now(self, device_sn, feed_id):
