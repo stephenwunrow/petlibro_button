@@ -28,7 +28,7 @@ def on_message(client, userdata, msg):
         return
 
     action = data.get("action", "")
-    if action in ["single", "double", "long"]:
+    if action in ["single", "double", "hold"]:
         print(f"Button pressed ({action})! Running script...")
         publish.single("final_petlibro/command", COMMAND_ARG, hostname=MQTT_BROKER)
         print(f"Sent '{COMMAND_ARG}' command to final_petlibro.py")
