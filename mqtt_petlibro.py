@@ -54,7 +54,7 @@ class PetlibroClient:
             self.token = data["data"]["token"]
             log("✅ Logged in")
 
-    async def request(self, path, payload=None):
+    async def request(self, path, payload=None, retry=True):
         url = f"{BASE_URL}{path}"
 
         headers = self.headers.copy()
@@ -63,10 +63,30 @@ class PetlibroClient:
         async with self.session.post(url, json=payload or {}, headers=headers) as resp:
             data = await resp.json()
 
+            # 🔁 Handle expired / missing login
+            if data.get("code") == 1009:
+                log("⚠️ Token expired. Re-authenticating...")
+
+                if not retry:
+                    raise Exception("Re-login failed")
+
+                await self.login()
+                return await self.request(path, payload, retry=False)
+
+            # ❌ Other API errors
             if data.get("code") != 0:
                 raise Exception(f"API error: {data}")
 
             return data.get("data")
+
+    async def keep_alive(client):
+        while True:
+            await asyncio.sleep(3600)  # every hour
+            try:
+                log("🔄 Refreshing login")
+                await client.login()
+            except Exception as e:
+                log(f"⚠️ Keep-alive login failed: {e}")
 
     async def list_devices(self):
         return await self.request("/device/device/list")
@@ -154,6 +174,7 @@ async def main():
         client.session = session
 
         await client.login()
+        asyncio.create_task(client.keep_alive())
 
         loop = asyncio.get_running_loop()
         mqtt_listener = MQTTListener(loop)
@@ -172,8 +193,12 @@ async def main():
             cmd = await mqtt_listener.queue.get()
 
             if cmd == "open":
-                if not await client.is_device_online(DEVICE_ID):
-                    log("⚠️ Device offline")
+                try:
+                    if not await client.is_device_online(DEVICE_ID):
+                        log("⚠️ Device offline")
+                        continue
+                except Exception as e:
+                    log(f"❌ Device check failed: {e}")
                     continue
 
                 if rotation_task:
