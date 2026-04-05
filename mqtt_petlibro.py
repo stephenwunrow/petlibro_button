@@ -184,7 +184,7 @@ async def main():
         feed_id = None
 
         async def auto_close(fid):
-            await asyncio.sleep(5 * 60)
+            await asyncio.sleep(10 * 60)
             await client.stop_feed_now(DEVICE_ID, fid)
 
         log("🚀 Ready for MQTT commands...")
